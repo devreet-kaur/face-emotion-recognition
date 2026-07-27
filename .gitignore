@@ -1,0 +1,79 @@
+# Data -- never commit datasets
+data/
+*.csv
+*.zip
+*.tar.gz
+
+# Model checkpoints
+results/
+*.pth
+*.pt
+*.pkl
+*.h5
+
+# DVC outputs -- tracked by DVC not Git
+/data/merged/
+/results/models/
+/results/plots/
+/results/preprocessing_benchmark.csv
+/results/mcnemar_results.json
+/results/pointing_game.json
+/results/affectnet_eval.json
+/results/robustness_results.json
+/results/explainability/
+
+# Experiment tracking
+mlruns/
+mlflow.db
+*.mlflow
+
+# Reports (generated)
+reports/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+
+# Environments
+.env
+.venv/
+venv/
+env/
+*.env
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+.AppleDouble
+
+# Colab
+.config/
+drive/
+sample_data/
+
+# Logs
+*.log
+logs/
+
+# API keys
+.kaggle/
+kaggle.json
+credentials.json
+token.json

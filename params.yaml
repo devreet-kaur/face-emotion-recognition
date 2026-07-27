@@ -16,6 +16,7 @@ data:
   current_data_path: data/inference_logs.csv
   report_path: reports/drift/
   n_reference_samples: 1000
+  train_ratio: 0.70
   image_size: 224
   num_workers: 2
   val_ratio: 0.15
@@ -37,7 +38,7 @@ augmentation:
 
 training:
   batch_size: 32
-  num_epochs: 30
+  epochs: 30
   learning_rate: 0.0001
   weight_decay: 0.0001
   patience: 5
@@ -48,6 +49,7 @@ model:
   num_classes: 7
   architecture: efficientnet_b0
   pretrained: true
+  dropout: 0.2
   target_layer_efficientnet: features.8.0
   target_layer_resnet50: layer4.2
   target_layer_mobilenet: features.18.0

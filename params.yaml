@@ -1,4 +1,4 @@
-data:
+﻿data:
   fer2013_path: data/FER       # folder format: FER/train/{class}/*.jpg  FER/test/{class}/*.jpg
   rafdb_path: data/basic       # RAF-DB basic: basic/EmoLabel/list_patition_label.txt + basic/Image/aligned.zip
   affectnet_path: data/affectnet

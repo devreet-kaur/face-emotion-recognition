@@ -32,7 +32,7 @@ LABELS = ["Angry", "Disgust", "Fear", "Happy", "Neutral", "Sad", "Surprise"]
 # Inference feature log consumed by src/monitor.py. The drift monitor had no input
 # because nothing ever wrote this file; the service now appends one row per detected
 # face. Path comes from params.yaml -- nothing hardcoded.
-INFERENCE_LOG = Path(P["monitoring"]["current_data_path"])
+INFERENCE_LOG = Path(P.get("monitoring", {}).get("current_data_path", "data/inference_logs.csv"))
 LOG_COLUMNS = [
     "timestamp", "mean_brightness", "std_brightness", "mean_contrast",
     "face_width_ratio", "face_height_ratio", "predicted_label", "confidence",

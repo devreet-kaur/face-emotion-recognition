@@ -13,7 +13,8 @@ stages:
       - data.mean
       - data.std
     outs:
-      - data/merged
+      - data/merged:
+          persist: true
 
   train:
     cmd: python src/train.py --arch ${model.architecture}

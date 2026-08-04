@@ -43,7 +43,6 @@ stages:
       - model.architecture
       - model.num_classes
     outs:
-      - results/preprocessing_benchmark.csv
       - results/mcnemar_results.json
     metrics:
       - results/preprocessing_benchmark.csv:

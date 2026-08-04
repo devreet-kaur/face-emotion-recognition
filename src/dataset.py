@@ -111,7 +111,8 @@ def load_rafdb_basic(root: str):
             if len(parts) < 2:
                 continue
             fname, raf_label = parts[0], int(parts[1])
-            stem = Path(fname).stem; img_path = img_dir / f"{stem}_aligned.jpg"
+            stem = Path(fname).stem
+            img_path = img_dir / f"{stem}_aligned.jpg"
             if not img_path.exists():
                 continue
             img = cv2.imdecode(

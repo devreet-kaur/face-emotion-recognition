@@ -58,7 +58,6 @@ stages:
       - explainability
       - model
     outs:
-      - results/pointing_game.json
       - results/explainability/heatmap_comparison_grid.png
     metrics:
       - results/pointing_game.json:

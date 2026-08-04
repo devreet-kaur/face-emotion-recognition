@@ -74,11 +74,11 @@ stages:
       - evaluate
       - model
     outs:
-      - results/affectnet_eval.json
-      - results/robustness_results.json
       - results/plots/confusion_matrix.png
     metrics:
       - results/affectnet_eval.json:
+          cache: false
+      - results/robustness_results.json:
           cache: false
 
   adaptive_preprocessing_eval:
@@ -96,8 +96,6 @@ stages:
       - preprocessing.unsharp_strength
       - model.architecture
       - model.num_classes
-    outs:
-      - results/adaptive_preprocessing_results.json
     metrics:
       - results/adaptive_preprocessing_results.json:
           cache: false
@@ -115,7 +113,6 @@ stages:
       - explainability.target_layer_mobilenet
       - model
     outs:
-      - results/hybrid_explainability_results.json
       - results/explainability/hybrid_heatmap_grid.png
     metrics:
       - results/hybrid_explainability_results.json:

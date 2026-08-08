@@ -1,0 +1,39 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: python src/dataset.py --mode prepare
+    deps:
+    - path: data/FER
+      hash: md5
+      md5: ebfce6cdd9da48bb3de0a8c024edc552.dir
+      size: 119762302
+      nfiles: 35888
+    - path: data/basic
+      hash: md5
+      md5: 99b69d390074a5c42b1b81b8c921dd96.dir
+      size: 2165284577
+      nfiles: 15347
+    - path: src/dataset.py
+      hash: md5
+      md5: 25022ca4724ea5c7cfa24484ac06f8cf
+      size: 8652
+    params:
+      params.yaml:
+        data.image_size: 224
+        data.mean:
+        - 0.485
+        - 0.456
+        - 0.406
+        data.std:
+        - 0.229
+        - 0.224
+        - 0.225
+        data.test_ratio: 0.15
+        data.train_ratio: 0.7
+        data.val_ratio: 0.15
+    outs:
+    - path: data/merged
+      hash: md5
+      md5: d751713988987e9331980363e24189ce.dir
+      size: 0
+      nfiles: 0

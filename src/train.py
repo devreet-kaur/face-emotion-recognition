@@ -248,7 +248,7 @@ def main():
     latest_ckpt = models_dir / f"{arch}_latest.pth"
     if latest_ckpt.exists():
         print(f"[train] Found checkpoint, resuming: {latest_ckpt}")
-        checkpoint = torch.load(latest_ckpt, map_location=device)
+          checkpoint = torch.load(latest_ckpt, map_location=device, weights_only=False)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         start_epoch  = checkpoint["epoch"] + 1

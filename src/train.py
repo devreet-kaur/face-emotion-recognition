@@ -191,8 +191,8 @@ def main():
     lr           = P["training"]["learning_rate"]
     weight_decay = P["training"]["weight_decay"]
     use_amp      = P["training"]["mixed_precision"]
-    sched_factor = P["scheduler"]["factor"]
-    sched_patience = P["scheduler"]["patience"]
+    sched_patience = P["training"]["patience"]
+    sched_factor = 0.5  # not in params.yaml, using sensible default
     models_dir   = Path("results/models")
     results_dir  = Path("results")
 
@@ -255,7 +255,7 @@ def main():
             "batch_size":    P["training"]["batch_size"],
             "image_size":    P["data"]["image_size"],
             "mixed_prec":    use_amp,
-            "scheduler":     P["scheduler"]["type"],
+            "scheduler":     "ReduceLROnPlateau",
         })
 
         for epoch in range(epochs):

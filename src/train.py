@@ -193,7 +193,9 @@ def main():
     use_amp      = P["training"]["mixed_precision"]
     sched_patience = P["training"]["patience"]
     sched_factor = 0.5  # not in params.yaml, using sensible default
-    models_dir   = Path("results/models")
+    # Save directly to Drive so checkpoints survive Colab disconnects
+    drive_dir    = Path("/content/drive/MyDrive/mai204-face-analysis/results")
+    models_dir   = drive_dir / "models"
     results_dir  = Path("results")
 
     models_dir.mkdir(parents=True, exist_ok=True)
@@ -235,13 +237,28 @@ def main():
     mlflow.set_tracking_uri(mlflow_uri)
     mlflow.set_experiment("mai204_ablation")
 
-    # ── Training ──────────────────────────────────────────────
+     # ── Training ──────────────────────────────────────────────
     best_val_acc = 0.0
     best_val_f1  = 0.0
     best_ckpt    = models_dir / f"{arch}_best.pth"
     history      = {"train_loss": [], "val_acc": [], "val_f1": []}
+    start_epoch  = 0
 
-    print(f"\n[train] Starting {epochs} epochs...\n")
+    # Resume from latest checkpoint if it exists (survives disconnects)
+    latest_ckpt = models_dir / f"{arch}_latest.pth"
+    if latest_ckpt.exists():
+        print(f"[train] Found checkpoint, resuming: {latest_ckpt}")
+        checkpoint = torch.load(latest_ckpt, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        start_epoch  = checkpoint["epoch"] + 1
+        best_val_acc = checkpoint.get("best_val_acc", 0.0)
+        best_val_f1  = checkpoint.get("best_val_f1", 0.0)
+        history      = checkpoint.get("history", history)
+        print(f"[train] Resuming from epoch {start_epoch}, "
+              f"best_val_acc so far: {best_val_acc:.4f}")
+
+    print(f"\n[train] Starting from epoch {start_epoch} to {epochs}...\n")
     start_time = time.time()
 
     with mlflow.start_run(run_name=arch):
@@ -258,7 +275,7 @@ def main():
             "scheduler":     "ReduceLROnPlateau",
         })
 
-        for epoch in range(epochs):
+        for epoch in range(start_epoch, epochs):
             # Train
             avg_loss = train_one_epoch(
                 model, train_dl, optimizer, loss_fn,
@@ -292,10 +309,17 @@ def main():
                     model, optimizer, epoch, val_acc, best_ckpt)
                 print(f"           ✓ Best checkpoint (val_acc={val_acc:.4f})")
 
-            # Per-epoch checkpoint -- protects against Colab session loss
-            epoch_ckpt = models_dir / f"{arch}_epoch{epoch+1:02d}.pth"
-            save_checkpoint(
-                model, optimizer, epoch, val_acc, epoch_ckpt)
+            # Save "latest" checkpoint every epoch to Drive -- enables resume
+            latest_ckpt = models_dir / f"{arch}_latest.pth"
+            torch.save({
+                "epoch":            epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "val_acc":          val_acc,
+                "best_val_acc":     best_val_acc,
+                "best_val_f1":      best_val_f1,
+                "history":          history,
+            }, latest_ckpt)
 
         wall_time = time.time() - start_time
 
@@ -318,7 +342,19 @@ def main():
     run_json = results_dir / f"run_{arch}.json"
     with open(run_json, "w") as f:
         json.dump(run_result, f, indent=2)
+
+    # Also save a copy directly to Drive
+    drive_json = drive_dir / f"run_{arch}.json"
+    with open(drive_json, "w") as f:
+        json.dump(run_result, f, indent=2)
     print(f"\n[train] Run saved → {run_json}")
+    print(f"[train] Also saved to Drive → {drive_json}")
+
+    # Clean up the "latest" checkpoint since training completed successfully
+    latest_ckpt = models_dir / f"{arch}_latest.pth"
+    if latest_ckpt.exists():
+        latest_ckpt.unlink()
+        print(f"[train] Removed resume checkpoint (training complete)")
 
     # ── Compile ablation table ────────────────────────────────
     archs_all = ["efficientnet_b0", "resnet50", "mobilenet_v3_large"]

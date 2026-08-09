@@ -1,0 +1,71 @@
+# .dockerignore -- Owner: Abdul Raouf Zabalawi
+#
+# Listed in the file manifest but missing from the shared zip, so written here.
+# Without it, `docker build` sends the whole working tree as build context --
+# including data/ and results/ once DVC has pulled them. That is gigabytes of
+# upload per build and is the difference between a 2-minute build and a stalled one.
+
+# --- DVC-tracked payloads: never in the image, mounted at runtime instead
+data/
+results/
+reports/
+*.pth
+*.pt
+*.onnx
+
+# --- version control and DVC internals
+.git/
+.gitignore
+.gitattributes
+.dvc/cache/
+.dvc/tmp/
+.dvc/config.local
+*.dvc
+
+# --- python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.Python
+
+# --- test and lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- notebooks and experiment tracking (not needed by the service)
+notebooks/
+*.ipynb
+.ipynb_checkpoints/
+mlruns/
+mlflow.db
+
+# --- demo assets: the webcam demo does not run in the container
+demo/
+*.mp4
+*.avi
+
+# --- docs and CI (not needed at runtime)
+.github/
+*.md
+!README.md
+MAI204_CV_Project_Hub.html
+
+# --- editor and OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- the compose file and the full dev requirements
+docker-compose.yml
+requirements.txt

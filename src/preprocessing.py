@@ -14,7 +14,6 @@ import yaml
 import numpy as np
 import cv2
 import mediapipe as mp
-from pathlib import Path
 from typing import Optional, Tuple
 
 with open("params.yaml") as f:

@@ -20,7 +20,6 @@ Unified label set (0-indexed, matching FER alphabetical order):
 import yaml
 import numpy as np
 import cv2
-import torch
 from pathlib import Path
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from sklearn.model_selection import StratifiedShuffleSplit
@@ -112,7 +111,8 @@ def load_rafdb_basic(root: str):
             if len(parts) < 2:
                 continue
             fname, raf_label = parts[0], int(parts[1])
-            stem = Path(fname).stem; img_path = img_dir / f"{stem}_aligned.jpg"
+            stem = Path(fname).stem
+            img_path = img_dir / f"{stem}_aligned.jpg"
             if not img_path.exists():
                 continue
             img = cv2.imdecode(
@@ -207,7 +207,7 @@ def make_weighted_sampler(items):
     labels = [it[1] for it in items]
     counts = np.bincount(labels, minlength=7)
     weights = 1.0 / (counts + 1e-6)
-    sample_w = [weights[l] for l in labels]
+    sample_w = [weights[lab] for lab in labels]
     return WeightedRandomSampler(sample_w, len(sample_w))
 
 
@@ -229,4 +229,4 @@ if __name__ == "__main__":
     train_l, val_l, test_l = get_dataloaders()
     imgs, labels = next(iter(train_l))
     print(f"Batch shape: {imgs.shape}")
-    print(f"Label sample: {[LABELS[l.item()] for l in labels[:8]]}")
+    print(f"Label sample: {[LABELS[lab.item()] for lab in labels[:8]]}")

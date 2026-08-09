@@ -6,9 +6,8 @@ All 9 tests must pass before opening any PR that touches src/app.py.
 
 import io
 import numpy as np
-import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 # Patch model loading before import
 with patch("src.app.load_model"):

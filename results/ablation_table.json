@@ -1,64 +1,64 @@
 {
   "efficientnet_b0": {
     "arch": "efficientnet_b0",
-    "best_val_acc": 0.6683,
-    "best_val_f1": 0.6188,
-    "train_time_sec": 320.0,
+    "best_val_acc": 0.687,
+    "best_val_f1": 0.6344,
+    "train_time_sec": 317.9,
     "epochs": 2,
     "history": {
       "train_loss": [
-        1.3014,
-        0.91
+        1.3051,
+        0.8946
       ],
       "val_acc": [
-        0.6348,
-        0.6683
+        0.6363,
+        0.687
       ],
       "val_f1": [
-        0.5743,
-        0.6188
+        0.5894,
+        0.6344
       ]
     }
   },
   "resnet50": {
     "arch": "resnet50",
-    "best_val_acc": 0.6599,
-    "best_val_f1": 0.6114,
-    "train_time_sec": 364.5,
+    "best_val_acc": 0.673,
+    "best_val_f1": 0.623,
+    "train_time_sec": 368.3,
     "epochs": 2,
     "history": {
       "train_loss": [
-        1.1104,
-        0.8137
+        1.1165,
+        0.8326
       ],
       "val_acc": [
-        0.6437,
-        0.6599
+        0.6337,
+        0.673
       ],
       "val_f1": [
-        0.5899,
-        0.6114
+        0.5925,
+        0.623
       ]
     }
   },
   "mobilenet_v3_large": {
     "arch": "mobilenet_v3_large",
-    "best_val_acc": 0.6727,
-    "best_val_f1": 0.6148,
-    "train_time_sec": 291.7,
+    "best_val_acc": 0.655,
+    "best_val_f1": 0.6067,
+    "train_time_sec": 282.9,
     "epochs": 2,
     "history": {
       "train_loss": [
-        1.2516,
-        0.8835
+        1.2442,
+        0.8813
       ],
       "val_acc": [
-        0.6404,
-        0.6727
+        0.6308,
+        0.655
       ],
       "val_f1": [
-        0.5928,
-        0.6148
+        0.5725,
+        0.6067
       ]
     }
   }

@@ -1,0 +1,65 @@
+{
+  "efficientnet_b0": {
+    "arch": "efficientnet_b0",
+    "best_val_acc": 0.6683,
+    "best_val_f1": 0.6188,
+    "train_time_sec": 320.0,
+    "epochs": 2,
+    "history": {
+      "train_loss": [
+        1.3014,
+        0.91
+      ],
+      "val_acc": [
+        0.6348,
+        0.6683
+      ],
+      "val_f1": [
+        0.5743,
+        0.6188
+      ]
+    }
+  },
+  "resnet50": {
+    "arch": "resnet50",
+    "best_val_acc": 0.6599,
+    "best_val_f1": 0.6114,
+    "train_time_sec": 364.5,
+    "epochs": 2,
+    "history": {
+      "train_loss": [
+        1.1104,
+        0.8137
+      ],
+      "val_acc": [
+        0.6437,
+        0.6599
+      ],
+      "val_f1": [
+        0.5899,
+        0.6114
+      ]
+    }
+  },
+  "mobilenet_v3_large": {
+    "arch": "mobilenet_v3_large",
+    "best_val_acc": 0.6727,
+    "best_val_f1": 0.6148,
+    "train_time_sec": 291.7,
+    "epochs": 2,
+    "history": {
+      "train_loss": [
+        1.2516,
+        0.8835
+      ],
+      "val_acc": [
+        0.6404,
+        0.6727
+      ],
+      "val_f1": [
+        0.5928,
+        0.6148
+      ]
+    }
+  }
+}

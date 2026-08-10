@@ -1,36 +1,17 @@
 """
 src/evaluate.py -- Abdul Raouf Zabalawi
-Cross-domain evaluation on held-out AffectNet + 4-degradation robustness suite.
 
-Owns these DVC outputs (see dvc.yaml `evaluate` stage):
-    results/affectnet_eval.json       accuracy, macro F1, per-class metrics, domain gap
-    results/robustness_results.json   clean baseline + 4 degradations, per emotion class
+Evaluation for the final facial emotion recognition model.
+
+Produces:
+    results/affectnet_eval.json
+    results/robustness_results.json
     results/plots/confusion_matrix.png
 
-Run from the repo root (params.yaml is read from the working directory):
-    python src/evaluate.py --mode all          # both studies (what dvc.yaml calls)
-    python src/evaluate.py --mode affectnet    # cross-domain only
-    python src/evaluate.py --mode robustness   # degradation suite only
-
-WHY TWO SEPARATE STUDIES
-------------------------
-AffectNet measures *domain shift*: different camera pipeline, different annotators,
-different demographic distribution. The accuracy drop is confounded with AffectNet's
-known label noise, so the number alone cannot tell us whether the model is fragile.
-
-The robustness suite removes that confound. It degrades our OWN test split with known,
-parameterised corruptions, so labels are held constant and any accuracy change is
-attributable to the corruption. Reported per emotion class, because a single average
-hides the actual finding (e.g. occlusion destroying Happy while barely touching Angry).
-
-LABEL SPACE
------------
-Unified 0-indexed, matching FER's alphabetical folder order (see src/dataset.py):
-    0=Angry 1=Disgust 2=Fear 3=Happy 4=Neutral 5=Sad 6=Surprise
-
-AffectNet ships 8 classes. Contempt has no counterpart in FER2013 or RAF-DB, so it is
-dropped rather than force-mapped. The surviving 7-way mapping is declared in
-params.yaml under evaluate.affectnet_class_map -- never hardcoded here.
+Modes:
+    python src/evaluate.py --mode robustness
+    python src/evaluate.py --mode affectnet
+    python src/evaluate.py --mode all
 """
 
 import argparse
@@ -40,7 +21,9 @@ from pathlib import Path
 
 import cv2
 import matplotlib
-matplotlib.use("Agg")  # headless: Colab, CI, Docker
+
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -55,8 +38,14 @@ from sklearn.metrics import (
 )
 from torch.utils.data import DataLoader, Dataset
 
-# src/ is on sys.path when invoked as `python src/evaluate.py`
-from dataset import LABELS, MergedFERDataset, build_splits
+# src/ is on sys.path when running:
+# python src/evaluate.py
+from dataset import LABELS, MergedFERDataset
+
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
 with open("params.yaml") as f:
     P = yaml.safe_load(f)
@@ -67,188 +56,616 @@ CLASS_NAMES = [LABELS[i] for i in range(NUM_CLASSES)]
 RESULTS = Path("results")
 PLOTS = RESULTS / "plots"
 
-# AffectNet 8 -> unified 7. Any AffectNet id absent from this map is dropped.
-AFFECTNET_MAP = {int(k): int(v) for k, v in P["evaluate"]["affectnet_class_map"].items()}
+TEST_MANIFEST = Path("data/merged/test_items.json")
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+AFFECTNET_MAP = {
+    int(k): int(v)
+    for k, v in P["evaluate"]["affectnet_class_map"].items()
+}
+
+DEVICE = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)
 
 
-# --------------------------------------------------------------------------- model
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
+
 def build_model(arch: str, num_classes: int) -> nn.Module:
-    """Identical head surgery to src/app.py -- must match or state_dict load fails."""
+    """Create the model architecture used by the project."""
+
     if arch == "efficientnet_b0":
-        m = models.efficientnet_b0(weights=None)
-        m.classifier = nn.Sequential(
+        model = models.efficientnet_b0(weights=None)
+
+        model.classifier = nn.Sequential(
             nn.Dropout(P["model"]["dropout"]),
-            nn.Linear(m.classifier[1].in_features, num_classes),
+            nn.Linear(
+                model.classifier[1].in_features,
+                num_classes,
+            ),
         )
+
     elif arch == "resnet50":
-        m = models.resnet50(weights=None)
-        m.fc = nn.Linear(m.fc.in_features, num_classes)
-    elif arch == "mobilenet_v3_large":
-        m = models.mobilenet_v3_large(weights=None)
-        m.classifier[-1] = nn.Linear(m.classifier[-1].in_features, num_classes)
-    else:
-        raise ValueError(f"Unknown architecture in params.yaml: {arch!r}")
-    return m
+        model = models.resnet50(weights=None)
 
-
-def load_checkpoint() -> nn.Module:
-    ckpt = Path(P["api"]["model_path"])
-    if not ckpt.exists():
-        sys.exit(
-            f"ERROR: checkpoint not found at {ckpt}\n"
-            "The ablation must finish first. Run `dvc pull` to fetch it from the "
-            "Drive remote, or `dvc repro train` to produce it."
+        model.fc = nn.Linear(
+            model.fc.in_features,
+            num_classes,
         )
-    arch = P["model"]["architecture"]
-    model = build_model(arch, NUM_CLASSES)
-    state = torch.load(str(ckpt), map_location="cpu")
-    # tolerate checkpoints saved as {"model_state_dict": ...} or a bare state_dict
-    if isinstance(state, dict) and "model_state_dict" in state:
-        state = state["model_state_dict"]
-    model.load_state_dict(state)
-    model.to(DEVICE).eval()
-    print(f"Loaded {arch} from {ckpt} on {DEVICE}")
+
+    elif arch == "mobilenet_v3_large":
+        model = models.mobilenet_v3_large(weights=None)
+
+        model.classifier[-1] = nn.Linear(
+            model.classifier[-1].in_features,
+            num_classes,
+        )
+
+    else:
+        raise ValueError(
+            f"Unknown architecture in params.yaml: {arch!r}"
+        )
+
     return model
 
 
-# ------------------------------------------------------------------ affectnet load
-def _read_image(path: Path):
-    """np.fromfile + imdecode so non-ASCII paths work on Windows."""
-    img = cv2.imdecode(np.fromfile(str(path), dtype=np.uint8), cv2.IMREAD_COLOR)
-    if img is None:
-        return None
-    return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+def load_checkpoint() -> nn.Module:
+    """Load the final trained checkpoint."""
 
+    checkpoint_path = Path(P["api"]["model_path"])
 
-def load_affectnet(root: str):
-    """
-    Load the held-out AffectNet val subset (Kaggle YOLO mirror).
-
-    Two layouts are accepted, because the mirrors differ:
-
-      A) YOLO detection layout
-             <root>/**/images/<name>.jpg
-             <root>/**/labels/<name>.txt     first token of first line = class id
-      B) class-per-folder layout
-             <root>/**/<class_id_or_name>/<name>.jpg
-
-    Returns [(img_rgb, unified_label, "affectnet"), ...] with contempt dropped.
-    """
-    root = Path(root)
-    if not root.exists():
+    if not checkpoint_path.exists():
         sys.exit(
-            f"ERROR: AffectNet not found at {root}\n"
-            "Download the AffectNet val subset (Kaggle YOLO mirror), place it at "
-            f"{root}, then `dvc add {root}` and `dvc push`."
+            f"ERROR: checkpoint not found at {checkpoint_path}\n"
+            "Run DVC pull first to obtain the final model."
         )
 
-    items, dropped, unmapped = [], 0, set()
+    architecture = P["model"]["architecture"]
 
-    # ---- layout A: YOLO images/ + labels/
-    label_dirs = [d for d in root.rglob("labels") if d.is_dir()]
-    for label_dir in label_dirs:
-        image_dir = label_dir.parent / "images"
-        if not image_dir.is_dir():
-            continue
-        for txt in sorted(label_dir.glob("*.txt")):
-            try:
-                first = txt.read_text().strip().split("\n")[0].split()
-            except OSError:
-                continue
-            if not first:
-                continue
-            raw = int(float(first[0]))
-            if raw not in AFFECTNET_MAP:
-                dropped += 1
-                unmapped.add(raw)
-                continue
-            stem_matches = [
-                p for ext in (".jpg", ".jpeg", ".png")
-                for p in [image_dir / (txt.stem + ext)] if p.exists()
-            ]
-            if not stem_matches:
-                continue
-            img = _read_image(stem_matches[0])
-            if img is None:
-                continue
-            items.append((img, AFFECTNET_MAP[raw], "affectnet"))
+    model = build_model(
+        architecture,
+        NUM_CLASSES,
+    )
 
-    # ---- layout B: class-per-folder (only if A found nothing)
-    if not items:
-        for class_dir in sorted(p for p in root.rglob("*") if p.is_dir()):
-            name = class_dir.name
-            raw = None
-            if name.isdigit():
-                raw = int(name)
-            else:
-                for cid, unified in AFFECTNET_MAP.items():
-                    if name.lower() == LABELS[unified].lower():
-                        raw = cid
-                        break
-            if raw is None:
-                continue
-            if raw not in AFFECTNET_MAP:
-                dropped += len(list(class_dir.glob("*.jpg")))
-                unmapped.add(raw)
-                continue
-            for ext in ("*.jpg", "*.jpeg", "*.png"):
-                for img_path in sorted(class_dir.glob(ext)):
-                    img = _read_image(img_path)
-                    if img is not None:
-                        items.append((img, AFFECTNET_MAP[raw], "affectnet"))
+    state = torch.load(
+        str(checkpoint_path),
+        map_location="cpu",
+    )
 
-    if not items:
+    if isinstance(state, dict) and "model_state_dict" in state:
+        state = state["model_state_dict"]
+
+    model.load_state_dict(state)
+
+    model.to(DEVICE)
+    model.eval()
+
+    print(
+        f"Loaded {architecture} "
+        f"from {checkpoint_path} "
+        f"on {DEVICE}"
+    )
+
+    return model
+
+
+# ---------------------------------------------------------------------------
+# Exact shared FER + RAF-DB held-out test split
+# ---------------------------------------------------------------------------
+
+def load_test_manifest():
+    """
+    Load the exact held-out test split created by the prepare stage.
+
+    The manifest now stores real image paths after the PR #18 fix.
+    """
+
+    if not TEST_MANIFEST.exists():
         sys.exit(
-            f"ERROR: found no usable images under {root}.\n"
-            "Expected either <root>/**/images + <root>/**/labels (YOLO), or "
-            "<root>/**/<class>/*.jpg. Inspect the extracted folder and adjust."
+            f"ERROR: test manifest not found: {TEST_MANIFEST}\n"
+            "Run `dvc pull data/merged` first."
         )
 
-    print(f"AffectNet: {len(items)} images kept, {dropped} dropped "
-          f"(unmapped class ids: {sorted(unmapped) or 'none'})")
-    dist = np.bincount([i[1] for i in items], minlength=NUM_CLASSES)
-    print("  per-class counts: "
-          + ", ".join(f"{CLASS_NAMES[i]}={dist[i]}" for i in range(NUM_CLASSES)))
+    with open(TEST_MANIFEST, "r") as f:
+        data = json.load(f)
+
+    items = []
+
+    missing_paths = []
+
+    for item in data:
+        path = str(item["path"])
+        label = int(item["label"])
+        source = str(item["source"])
+
+        if not Path(path).exists():
+            missing_paths.append(path)
+
+        items.append(
+            (
+                path,
+                label,
+                source,
+            )
+        )
+
+    if missing_paths:
+        print(
+            f"ERROR: {len(missing_paths)} test images "
+            "are missing from this computer."
+        )
+
+        print("First missing paths:")
+
+        for path in missing_paths[:10]:
+            print(f"  {path}")
+
+        sys.exit(
+            "Install the FER2013 and RAF-DB raw image folders "
+            "before running evaluation."
+        )
+
+    print(
+        f"Loaded exact held-out test manifest: "
+        f"{len(items)} images"
+    )
+
+    source_counts = {}
+
+    for _, _, source in items:
+        source_counts[source] = (
+            source_counts.get(source, 0) + 1
+        )
+
+    print(
+        "Sources: "
+        + ", ".join(
+            f"{name}={count}"
+            for name, count in sorted(source_counts.items())
+        )
+    )
+
     return items
 
 
-# ------------------------------------------------------------------- degradations
+# ---------------------------------------------------------------------------
+# Image loading
+# ---------------------------------------------------------------------------
+
+def _read_image(path: Path):
+    """
+    Read an image safely on Windows.
+
+    np.fromfile + cv2.imdecode also supports paths
+    containing non-ASCII characters.
+    """
+
+    try:
+        raw = np.fromfile(
+            str(path),
+            dtype=np.uint8,
+        )
+
+        img = cv2.imdecode(
+            raw,
+            cv2.IMREAD_COLOR,
+        )
+
+    except Exception:
+        return None
+
+    if img is None:
+        return None
+
+    return cv2.cvtColor(
+        img,
+        cv2.COLOR_BGR2RGB,
+    )
+
+
+def _load_item_image(item):
+    """
+    Load either:
+
+    1. FER/RAF-DB path-based item:
+       ("data/...jpg", label, source)
+
+    2. AffectNet in-memory item:
+       (numpy_array, label, "affectnet")
+    """
+
+    image_data, label, source = item
+
+    if isinstance(
+        image_data,
+        (str, Path),
+    ):
+        img = _read_image(
+            Path(image_data)
+        )
+
+        if img is None:
+            raise RuntimeError(
+                f"Could not read image: {image_data}"
+            )
+
+    elif isinstance(
+        image_data,
+        np.ndarray,
+    ):
+        img = image_data.copy()
+
+    else:
+        raise TypeError(
+            "Unsupported image type: "
+            f"{type(image_data)}"
+        )
+
+    # Match dataset.py handling of FER2013.
+    if (
+        source == "fer"
+        and img.shape[0] == 48
+        and img.shape[1] == 48
+    ):
+        gray = cv2.cvtColor(
+            img,
+            cv2.COLOR_RGB2GRAY,
+        )
+
+        img = cv2.cvtColor(
+            gray,
+            cv2.COLOR_GRAY2RGB,
+        )
+
+    return img, label, source
+
+
+# ---------------------------------------------------------------------------
+# AffectNet
+# ---------------------------------------------------------------------------
+
+def load_affectnet(root: str):
+    """
+    Load held-out AffectNet validation images.
+
+    Supported layouts:
+
+    A) YOLO format
+
+       <root>/**/images/<image>.jpg
+       <root>/**/labels/<image>.txt
+
+    B) Class folders
+
+       <root>/**/<class>/<image>.jpg
+
+    AffectNet Contempt is dropped because the project
+    uses seven emotion classes.
+    """
+
+    root = Path(root)
+
+    if not root.exists():
+        sys.exit(
+            f"ERROR: AffectNet not found at {root}\n"
+            "Place the AffectNet validation dataset "
+            "at data/affectnet before running this mode."
+        )
+
+    items = []
+
+    dropped = 0
+
+    unmapped = set()
+
+    # ---------------------------------------------------------------
+    # Layout A: YOLO images + labels
+    # ---------------------------------------------------------------
+
+    label_dirs = [
+        directory
+        for directory in root.rglob("labels")
+        if directory.is_dir()
+    ]
+
+    for label_dir in label_dirs:
+
+        image_dir = (
+            label_dir.parent / "images"
+        )
+
+        if not image_dir.is_dir():
+            continue
+
+        for txt_path in sorted(
+            label_dir.glob("*.txt")
+        ):
+
+            try:
+                content = (
+                    txt_path
+                    .read_text()
+                    .strip()
+                )
+
+                if not content:
+                    continue
+
+                first = (
+                    content
+                    .split("\n")[0]
+                    .split()
+                )
+
+            except OSError:
+                continue
+
+            if not first:
+                continue
+
+            raw_class = int(
+                float(first[0])
+            )
+
+            if raw_class not in AFFECTNET_MAP:
+                dropped += 1
+                unmapped.add(raw_class)
+                continue
+
+            image_path = None
+
+            for extension in (
+                ".jpg",
+                ".jpeg",
+                ".png",
+            ):
+                candidate = (
+                    image_dir
+                    / f"{txt_path.stem}{extension}"
+                )
+
+                if candidate.exists():
+                    image_path = candidate
+                    break
+
+            if image_path is None:
+                continue
+
+            img = _read_image(
+                image_path
+            )
+
+            if img is None:
+                continue
+
+            items.append(
+                (
+                    img,
+                    AFFECTNET_MAP[raw_class],
+                    "affectnet",
+                )
+            )
+
+    # ---------------------------------------------------------------
+    # Layout B: class folders
+    # ---------------------------------------------------------------
+
+    if not items:
+
+        for class_dir in sorted(
+            path
+            for path in root.rglob("*")
+            if path.is_dir()
+        ):
+
+            name = class_dir.name
+
+            raw_class = None
+
+            if name.isdigit():
+                raw_class = int(name)
+
+            else:
+                for (
+                    affectnet_id,
+                    unified_id,
+                ) in AFFECTNET_MAP.items():
+
+                    if (
+                        name.lower()
+                        == LABELS[unified_id].lower()
+                    ):
+                        raw_class = affectnet_id
+                        break
+
+            if raw_class is None:
+                continue
+
+            if raw_class not in AFFECTNET_MAP:
+                unmapped.add(raw_class)
+                continue
+
+            for extension in (
+                "*.jpg",
+                "*.jpeg",
+                "*.png",
+            ):
+
+                for image_path in sorted(
+                    class_dir.glob(extension)
+                ):
+
+                    img = _read_image(
+                        image_path
+                    )
+
+                    if img is None:
+                        continue
+
+                    items.append(
+                        (
+                            img,
+                            AFFECTNET_MAP[raw_class],
+                            "affectnet",
+                        )
+                    )
+
+    if not items:
+        sys.exit(
+            f"ERROR: no usable AffectNet images found under {root}"
+        )
+
+    print(
+        f"AffectNet: {len(items)} images kept, "
+        f"{dropped} dropped "
+        f"(unmapped class ids: "
+        f"{sorted(unmapped) or 'none'})"
+    )
+
+    distribution = np.bincount(
+        [item[1] for item in items],
+        minlength=NUM_CLASSES,
+    )
+
+    print(
+        "Per-class counts: "
+        + ", ".join(
+            f"{CLASS_NAMES[i]}={distribution[i]}"
+            for i in range(NUM_CLASSES)
+        )
+    )
+
+    return items
+
+
+# ---------------------------------------------------------------------------
+# Robustness degradations
+# ---------------------------------------------------------------------------
+
 def degrade_dark(img):
-    """Low light: multiplicative brightness reduction on the raw uint8 image."""
-    factor = P["evaluate"]["robustness_dark_factor"]
-    return np.clip(img.astype(np.float32) * factor, 0, 255).astype(np.uint8)
+    """Simulate low-light conditions."""
+
+    factor = (
+        P["evaluate"]
+        ["robustness_dark_factor"]
+    )
+
+    return np.clip(
+        img.astype(np.float32) * factor,
+        0,
+        255,
+    ).astype(np.uint8)
 
 
 def degrade_blur(img):
-    """Motion/defocus blur: Gaussian with sigma from params, odd kernel derived."""
-    sigma = P["evaluate"]["robustness_blur_sigma"]
-    k = max(3, int(2 * round(3 * sigma) + 1))  # ~3 sigma support, forced odd
-    return cv2.GaussianBlur(img, (k, k), sigmaX=sigma, sigmaY=sigma)
+    """Simulate blur."""
+
+    sigma = (
+        P["evaluate"]
+        ["robustness_blur_sigma"]
+    )
+
+    kernel = max(
+        3,
+        int(
+            2 * round(3 * sigma) + 1
+        ),
+    )
+
+    return cv2.GaussianBlur(
+        img,
+        (kernel, kernel),
+        sigmaX=sigma,
+        sigmaY=sigma,
+    )
 
 
 def degrade_rotate(img):
-    """Off-axis face. Deliberately outside the +/-15 deg training augmentation."""
-    angle = P["evaluate"]["robustness_rotate_angle"]
-    h, w = img.shape[:2]
-    M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1.0)
-    return cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_LINEAR,
-                          borderMode=cv2.BORDER_REPLICATE)
+    """Rotate the face outside the training augmentation range."""
+
+    angle = (
+        P["evaluate"]
+        ["robustness_rotate_angle"]
+    )
+
+    height, width = img.shape[:2]
+
+    matrix = cv2.getRotationMatrix2D(
+        (
+            width / 2,
+            height / 2,
+        ),
+        angle,
+        1.0,
+    )
+
+    return cv2.warpAffine(
+        img,
+        matrix,
+        (
+            width,
+            height,
+        ),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REPLICATE,
+    )
 
 
 def degrade_occlude(img):
-    """Centred black patch -- stands in for a hand, mask, or hair."""
-    size = P["evaluate"]["robustness_occlude_patch"]
+    """Place a black patch over the center of the face."""
+
+    patch_size = (
+        P["evaluate"]
+        ["robustness_occlude_patch"]
+    )
+
     out = img.copy()
-    h, w = out.shape[:2]
-    # patch is defined for a 224px input; scale it so the occluded fraction is constant
-    scale = min(h, w) / P["data"]["image_size"]
-    s = max(1, int(round(size * scale)))
-    cy, cx = h // 2, w // 2
-    y0, y1 = max(0, cy - s // 2), min(h, cy + s // 2)
-    x0, x1 = max(0, cx - s // 2), min(w, cx + s // 2)
-    out[y0:y1, x0:x1] = 0
+
+    height, width = out.shape[:2]
+
+    scale = (
+        min(height, width)
+        / P["data"]["image_size"]
+    )
+
+    size = max(
+        1,
+        int(
+            round(
+                patch_size * scale
+            )
+        ),
+    )
+
+    center_y = height // 2
+    center_x = width // 2
+
+    y0 = max(
+        0,
+        center_y - size // 2,
+    )
+
+    y1 = min(
+        height,
+        center_y + size // 2,
+    )
+
+    x0 = max(
+        0,
+        center_x - size // 2,
+    )
+
+    x1 = min(
+        width,
+        center_x + size // 2,
+    )
+
+    out[
+        y0:y1,
+        x0:x1,
+    ] = 0
+
     return out
 
 
@@ -260,241 +677,817 @@ DEGRADATIONS = {
     "occlude": degrade_occlude,
 }
 
+
 DEGRADATION_PARAMS = {
     "clean": "none",
-    "dark": f"brightness x {P['evaluate']['robustness_dark_factor']}",
-    "blur": f"gaussian sigma {P['evaluate']['robustness_blur_sigma']}",
-    "rotate": f"{P['evaluate']['robustness_rotate_angle']} degrees",
-    "occlude": f"{P['evaluate']['robustness_occlude_patch']}x"
-               f"{P['evaluate']['robustness_occlude_patch']} px patch",
+
+    "dark": (
+        "brightness x "
+        f"{P['evaluate']['robustness_dark_factor']}"
+    ),
+
+    "blur": (
+        "gaussian sigma "
+        f"{P['evaluate']['robustness_blur_sigma']}"
+    ),
+
+    "rotate": (
+        f"{P['evaluate']['robustness_rotate_angle']} degrees"
+    ),
+
+    "occlude": (
+        f"{P['evaluate']['robustness_occlude_patch']}x"
+        f"{P['evaluate']['robustness_occlude_patch']} px patch"
+    ),
 }
 
 
-class DegradedDataset(Dataset):
-    """Wraps items and applies a raw-image corruption before the eval transform."""
+# ---------------------------------------------------------------------------
+# Evaluation dataset
+# ---------------------------------------------------------------------------
 
-    def __init__(self, items, degrade_fn=None):
-        self.degrade_fn = degrade_fn
-        self.inner = MergedFERDataset(items, augment=False)
+class DegradedDataset(Dataset):
+    """
+    Evaluation dataset that supports both:
+
+    - path-based FER/RAF-DB images
+    - already-loaded AffectNet numpy images
+
+    A degradation is applied before the normal validation transform.
+    """
+
+    def __init__(
+        self,
+        items,
+        degrade_fn=None,
+    ):
         self.items = items
+
+        self.degrade_fn = degrade_fn
+
+        # Reuse the exact validation preprocessing
+        # defined by the project dataset loader.
+        self.transforms = MergedFERDataset(
+            [],
+            augment=False,
+        ).val_tf
 
     def __len__(self):
         return len(self.items)
 
-    def __getitem__(self, idx):
-        img, label, src = self.items[idx]
+    def __getitem__(
+        self,
+        idx,
+    ):
+        img, label, _ = _load_item_image(
+            self.items[idx]
+        )
+
         if self.degrade_fn is not None:
-            img = self.degrade_fn(img)
-        return self.inner.val_tf(image=img)["image"], label
+            img = self.degrade_fn(
+                img
+            )
+
+        tensor = self.transforms(
+            image=img
+        )["image"]
+
+        return tensor, label
 
 
-# ------------------------------------------------------------------------ inference
+# ---------------------------------------------------------------------------
+# Inference
+# ---------------------------------------------------------------------------
+
 @torch.no_grad()
-def predict_all(model, items, degrade_fn=None):
-    """Returns (y_true, y_pred) over items, optionally degraded."""
-    dl = DataLoader(
-        DegradedDataset(items, degrade_fn),
+def predict_all(
+    model,
+    items,
+    degrade_fn=None,
+):
+    """
+    Run the model over all supplied items.
+
+    Returns:
+        y_true
+        y_pred
+    """
+
+    dataset = DegradedDataset(
+        items,
+        degrade_fn,
+    )
+
+    loader = DataLoader(
+        dataset,
         batch_size=P["training"]["batch_size"],
         shuffle=False,
         num_workers=P["data"]["num_workers"],
+        pin_memory=torch.cuda.is_available(),
     )
-    y_true, y_pred = [], []
-    for imgs, labels in dl:
-        logits = model(imgs.to(DEVICE))
-        y_pred.extend(logits.argmax(dim=1).cpu().numpy().tolist())
-        y_true.extend(labels.numpy().tolist())
-    return np.asarray(y_true), np.asarray(y_pred)
+
+    y_true = []
+
+    y_pred = []
+
+    for images, labels in loader:
+
+        images = images.to(
+            DEVICE,
+            non_blocking=True,
+        )
+
+        logits = model(
+            images
+        )
+
+        predictions = (
+            logits
+            .argmax(dim=1)
+            .cpu()
+            .numpy()
+            .tolist()
+        )
+
+        y_pred.extend(
+            predictions
+        )
+
+        y_true.extend(
+            labels
+            .cpu()
+            .numpy()
+            .tolist()
+        )
+
+    return (
+        np.asarray(y_true),
+        np.asarray(y_pred),
+    )
 
 
-def metric_block(y_true, y_pred) -> dict:
-    """Accuracy, macro F1, and per-class precision/recall/F1/support."""
-    acc = float(accuracy_score(y_true, y_pred))
-    f1 = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
-    pr, rc, f1c, sup = precision_recall_fscore_support(
-        y_true, y_pred, labels=list(range(NUM_CLASSES)), zero_division=0
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
+
+def metric_block(
+    y_true,
+    y_pred,
+) -> dict:
+
+    accuracy = float(
+        accuracy_score(
+            y_true,
+            y_pred,
+        )
     )
+
+    macro_f1 = float(
+        f1_score(
+            y_true,
+            y_pred,
+            average="macro",
+            zero_division=0,
+        )
+    )
+
+    (
+        precision,
+        recall,
+        class_f1,
+        support,
+    ) = precision_recall_fscore_support(
+        y_true,
+        y_pred,
+        labels=list(
+            range(NUM_CLASSES)
+        ),
+        zero_division=0,
+    )
+
     return {
-        "accuracy": round(acc, 4),
-        "f1": round(f1, 4),
-        "n_samples": int(len(y_true)),
+        "accuracy": round(
+            accuracy,
+            4,
+        ),
+
+        "f1": round(
+            macro_f1,
+            4,
+        ),
+
+        "n_samples": int(
+            len(y_true)
+        ),
+
         "per_class": {
             CLASS_NAMES[i]: {
-                "precision": round(float(pr[i]), 4),
-                "recall": round(float(rc[i]), 4),
-                "f1": round(float(f1c[i]), 4),
-                "support": int(sup[i]),
+                "precision": round(
+                    float(precision[i]),
+                    4,
+                ),
+
+                "recall": round(
+                    float(recall[i]),
+                    4,
+                ),
+
+                "f1": round(
+                    float(class_f1[i]),
+                    4,
+                ),
+
+                "support": int(
+                    support[i]
+                ),
             }
-            for i in range(NUM_CLASSES)
+
+            for i in range(
+                NUM_CLASSES
+            )
         },
     }
 
 
-def save_confusion_matrix(y_true, y_pred, path: Path, title: str):
-    cm = confusion_matrix(y_true, y_pred, labels=list(range(NUM_CLASSES)))
-    cm_norm = cm.astype(np.float32) / np.maximum(cm.sum(axis=1, keepdims=True), 1)
+# ---------------------------------------------------------------------------
+# Confusion matrix
+# ---------------------------------------------------------------------------
 
-    fig, ax = plt.subplots(figsize=(7.5, 6.5))
-    im = ax.imshow(cm_norm, cmap="Blues", vmin=0, vmax=1)
-    ax.set_xticks(range(NUM_CLASSES), CLASS_NAMES, rotation=45, ha="right")
-    ax.set_yticks(range(NUM_CLASSES), CLASS_NAMES)
-    ax.set_xlabel("Predicted")
-    ax.set_ylabel("True")
-    ax.set_title(title)
-    for i in range(NUM_CLASSES):
-        for j in range(NUM_CLASSES):
-            ax.text(j, i, f"{cm_norm[i, j]:.2f}\n({cm[i, j]})",
-                    ha="center", va="center", fontsize=7,
-                    color="white" if cm_norm[i, j] > 0.55 else "black")
-    fig.colorbar(im, ax=ax, label="row-normalised rate")
+def save_confusion_matrix(
+    y_true,
+    y_pred,
+    path: Path,
+    title: str,
+):
+
+    matrix = confusion_matrix(
+        y_true,
+        y_pred,
+        labels=list(
+            range(NUM_CLASSES)
+        ),
+    )
+
+    matrix_norm = (
+        matrix.astype(np.float32)
+        / np.maximum(
+            matrix.sum(
+                axis=1,
+                keepdims=True,
+            ),
+            1,
+        )
+    )
+
+    fig, ax = plt.subplots(
+        figsize=(7.5, 6.5)
+    )
+
+    image = ax.imshow(
+        matrix_norm,
+        cmap="Blues",
+        vmin=0,
+        vmax=1,
+    )
+
+    ax.set_xticks(
+        range(NUM_CLASSES),
+        CLASS_NAMES,
+        rotation=45,
+        ha="right",
+    )
+
+    ax.set_yticks(
+        range(NUM_CLASSES),
+        CLASS_NAMES,
+    )
+
+    ax.set_xlabel(
+        "Predicted"
+    )
+
+    ax.set_ylabel(
+        "True"
+    )
+
+    ax.set_title(
+        title
+    )
+
+    for row in range(
+        NUM_CLASSES
+    ):
+        for col in range(
+            NUM_CLASSES
+        ):
+
+            ax.text(
+                col,
+                row,
+                (
+                    f"{matrix_norm[row, col]:.2f}\n"
+                    f"({matrix[row, col]})"
+                ),
+                ha="center",
+                va="center",
+                fontsize=7,
+                color=(
+                    "white"
+                    if matrix_norm[row, col] > 0.55
+                    else "black"
+                ),
+            )
+
+    fig.colorbar(
+        image,
+        ax=ax,
+        label="row-normalised rate",
+    )
+
     fig.tight_layout()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
-    print(f"wrote {path}")
+
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    fig.savefig(
+        path,
+        dpi=150,
+    )
+
+    plt.close(
+        fig
+    )
+
+    print(
+        f"wrote {path}"
+    )
 
 
-def write_json(obj, path: Path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, indent=2))
-    print(f"wrote {path}")
+# ---------------------------------------------------------------------------
+# JSON writing
+# ---------------------------------------------------------------------------
+
+def write_json(
+    obj,
+    path: Path,
+):
+
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    path.write_text(
+        json.dumps(
+            obj,
+            indent=2,
+        )
+    )
+
+    print(
+        f"wrote {path}"
+    )
 
 
-# ---------------------------------------------------------------------- the studies
-def run_affectnet(model, test_items):
-    """Cross-domain evaluation. The gap is the headline number of the report."""
-    print("\n=== Cross-domain evaluation: held-out AffectNet ===")
+# ---------------------------------------------------------------------------
+# AffectNet cross-domain evaluation
+# ---------------------------------------------------------------------------
 
-    in_true, in_pred = predict_all(model, test_items)
-    in_dist = metric_block(in_true, in_pred)
-    print(f"In-distribution (FER+RAF-DB test): acc={in_dist['accuracy']:.4f} "
-          f"f1={in_dist['f1']:.4f}")
+def run_affectnet(
+    model,
+    test_items,
+):
 
-    af_items = load_affectnet(P["data"]["affectnet_path"])
-    af_true, af_pred = predict_all(model, af_items)
-    af = metric_block(af_true, af_pred)
-    print(f"Held-out AffectNet:                acc={af['accuracy']:.4f} "
-          f"f1={af['f1']:.4f}")
+    print(
+        "\n=== Cross-domain evaluation: held-out AffectNet ==="
+    )
 
-    gap_acc = round(in_dist["accuracy"] - af["accuracy"], 4)
-    gap_f1 = round(in_dist["f1"] - af["f1"], 4)
-    print(f"DOMAIN GAP: accuracy {gap_acc:+.4f}  macro-F1 {gap_f1:+.4f}")
+    print(
+        "\nRunning in-distribution FER + RAF-DB test..."
+    )
+
+    in_true, in_pred = predict_all(
+        model,
+        test_items,
+    )
+
+    in_distribution = metric_block(
+        in_true,
+        in_pred,
+    )
+
+    print(
+        "In-distribution FER+RAF-DB: "
+        f"acc={in_distribution['accuracy']:.4f} "
+        f"f1={in_distribution['f1']:.4f}"
+    )
+
+    print(
+        "\nLoading AffectNet..."
+    )
+
+    affectnet_items = load_affectnet(
+        P["data"]["affectnet_path"]
+    )
+
+    print(
+        "\nRunning AffectNet evaluation..."
+    )
+
+    affectnet_true, affectnet_pred = predict_all(
+        model,
+        affectnet_items,
+    )
+
+    affectnet_metrics = metric_block(
+        affectnet_true,
+        affectnet_pred,
+    )
+
+    print(
+        "Held-out AffectNet: "
+        f"acc={affectnet_metrics['accuracy']:.4f} "
+        f"f1={affectnet_metrics['f1']:.4f}"
+    )
+
+    gap_accuracy = round(
+        in_distribution["accuracy"]
+        - affectnet_metrics["accuracy"],
+        4,
+    )
+
+    gap_f1 = round(
+        in_distribution["f1"]
+        - affectnet_metrics["f1"],
+        4,
+    )
+
+    print(
+        "DOMAIN GAP: "
+        f"accuracy {gap_accuracy:+.4f} "
+        f"macro-F1 {gap_f1:+.4f}"
+    )
 
     save_confusion_matrix(
-        af_true, af_pred, PLOTS / "confusion_matrix.png",
-        f"AffectNet (held out) -- {P['model']['architecture']}",
+        affectnet_true,
+        affectnet_pred,
+        PLOTS / "confusion_matrix.png",
+        (
+            "AffectNet (held out) -- "
+            f"{P['model']['architecture']}"
+        ),
     )
 
     payload = {
-        # top-level keys the report and dvc metrics read directly
-        "accuracy": af["accuracy"],
-        "f1": af["f1"],
-        "domain_gap_accuracy": gap_acc,
-        "domain_gap_f1": gap_f1,
-        "architecture": P["model"]["architecture"],
-        "in_distribution": in_dist,
-        "affectnet": af,
+        "accuracy": (
+            affectnet_metrics["accuracy"]
+        ),
+
+        "f1": (
+            affectnet_metrics["f1"]
+        ),
+
+        "domain_gap_accuracy": (
+            gap_accuracy
+        ),
+
+        "domain_gap_f1": (
+            gap_f1
+        ),
+
+        "architecture": (
+            P["model"]["architecture"]
+        ),
+
+        "in_distribution": (
+            in_distribution
+        ),
+
+        "affectnet": (
+            affectnet_metrics
+        ),
+
         "notes": {
-            "protocol": "AffectNet is never used for training, validation, or tuning. "
-                        "Single evaluation pass, no threshold fitting.",
-            "class_mapping": "8 AffectNet classes -> 7 unified; contempt dropped "
-                             "(no counterpart in FER2013 or RAF-DB).",
-            "caveat": "AffectNet labels are automatically harvested and noisier than "
-                      "RAF-DB's manual annotation. Part of the gap is label quality, "
-                      "not model fragility -- the robustness suite isolates the latter.",
+            "protocol": (
+                "AffectNet is not used for training, "
+                "validation, or tuning."
+            ),
+
+            "class_mapping": (
+                "AffectNet 8 classes are mapped to "
+                "the project's 7 emotion classes; "
+                "Contempt is dropped."
+            ),
+
+            "caveat": (
+                "AffectNet uses a different data domain "
+                "and may contain more label noise, so the "
+                "domain gap should be interpreted carefully."
+            ),
         },
     }
-    write_json(payload, RESULTS / "affectnet_eval.json")
+
+    write_json(
+        payload,
+        RESULTS / "affectnet_eval.json",
+    )
+
     return payload
 
 
-def run_robustness(model, test_items):
-    """
-    4-degradation suite on our OWN test split, so labels are held constant and any
-    accuracy change is attributable to the corruption rather than to annotation noise.
-    """
-    print("\n=== Robustness suite: 4 degradations ===")
-    conditions, baseline_acc = {}, None
+# ---------------------------------------------------------------------------
+# Robustness evaluation
+# ---------------------------------------------------------------------------
 
-    for name, fn in DEGRADATIONS.items():
-        y_true, y_pred = predict_all(model, test_items, fn)
-        block = metric_block(y_true, y_pred)
-        block["parameter"] = DEGRADATION_PARAMS[name]
-        if name == "clean":
-            baseline_acc = block["accuracy"]
-            block["accuracy_drop_vs_clean"] = 0.0
+def run_robustness(
+    model,
+    test_items,
+):
+
+    print(
+        "\n=== Robustness suite: 4 degradations ==="
+    )
+
+    print(
+        f"Evaluating {len(test_items)} "
+        "held-out FER + RAF-DB images."
+    )
+
+    conditions = {}
+
+    baseline_accuracy = None
+
+    for (
+        condition_name,
+        degradation_function,
+    ) in DEGRADATIONS.items():
+
+        print(
+            f"\nRunning condition: "
+            f"{condition_name}"
+        )
+
+        y_true, y_pred = predict_all(
+            model,
+            test_items,
+            degradation_function,
+        )
+
+        metrics = metric_block(
+            y_true,
+            y_pred,
+        )
+
+        metrics["parameter"] = (
+            DEGRADATION_PARAMS[
+                condition_name
+            ]
+        )
+
+        if condition_name == "clean":
+
+            baseline_accuracy = (
+                metrics["accuracy"]
+            )
+
+            metrics[
+                "accuracy_drop_vs_clean"
+            ] = 0.0
+
         else:
-            block["accuracy_drop_vs_clean"] = round(baseline_acc - block["accuracy"], 4)
-        conditions[name] = block
-        print(f"  {name:<8} acc={block['accuracy']:.4f}  "
-              f"drop={block['accuracy_drop_vs_clean']:+.4f}  ({block['parameter']})")
 
-    degraded = {k: v for k, v in conditions.items() if k != "clean"}
+            metrics[
+                "accuracy_drop_vs_clean"
+            ] = round(
+                baseline_accuracy
+                - metrics["accuracy"],
+                4,
+            )
 
-    # which single condition hurts each emotion class most -- the actual finding
+        conditions[
+            condition_name
+        ] = metrics
+
+        print(
+            f"  {condition_name:<8} "
+            f"acc={metrics['accuracy']:.4f} "
+            f"f1={metrics['f1']:.4f} "
+            f"drop="
+            f"{metrics['accuracy_drop_vs_clean']:+.4f} "
+            f"({metrics['parameter']})"
+        )
+
+    degraded_conditions = {
+        key: value
+
+        for key, value
+        in conditions.items()
+
+        if key != "clean"
+    }
+
     worst_per_class = {}
-    for ci, cname in enumerate(CLASS_NAMES):
-        clean_f1 = conditions["clean"]["per_class"][cname]["f1"]
+
+    for class_name in CLASS_NAMES:
+
+        clean_f1 = (
+            conditions["clean"]
+            ["per_class"]
+            [class_name]
+            ["f1"]
+        )
+
         drops = {
-            k: round(clean_f1 - v["per_class"][cname]["f1"], 4)
-            for k, v in degraded.items()
-        }
-        worst = max(drops, key=drops.get)
-        worst_per_class[cname] = {
-            "worst_condition": worst,
-            "f1_drop": drops[worst],
-            "all_drops": drops,
+            condition_name: round(
+                clean_f1
+                - condition_metrics[
+                    "per_class"
+                ][class_name]["f1"],
+                4,
+            )
+
+            for (
+                condition_name,
+                condition_metrics,
+            ) in degraded_conditions.items()
         }
 
-    most_fragile = max(degraded, key=lambda k: degraded[k]["accuracy_drop_vs_clean"])
-    print(f"  most damaging condition: {most_fragile}")
+        worst_condition = max(
+            drops,
+            key=drops.get,
+        )
+
+        worst_per_class[
+            class_name
+        ] = {
+            "worst_condition": (
+                worst_condition
+            ),
+
+            "f1_drop": (
+                drops[
+                    worst_condition
+                ]
+            ),
+
+            "all_drops": (
+                drops
+            ),
+        }
+
+    most_damaging_condition = max(
+        degraded_conditions,
+        key=lambda name: (
+            degraded_conditions[name]
+            ["accuracy_drop_vs_clean"]
+        ),
+    )
+
+    print(
+        "\nMost damaging condition: "
+        f"{most_damaging_condition}"
+    )
 
     payload = {
-        "architecture": P["model"]["architecture"],
-        "evaluated_on": "in-distribution FER+RAF-DB test split (labels held constant)",
-        "clean_accuracy": conditions["clean"]["accuracy"],
-        "most_damaging_condition": most_fragile,
-        "conditions": conditions,
-        "worst_condition_per_emotion": worst_per_class,
+        "architecture": (
+            P["model"]["architecture"]
+        ),
+
+        "evaluated_on": (
+            "Exact held-out FER+RAF-DB test split "
+            "from data/merged/test_items.json"
+        ),
+
+        "n_samples": (
+            len(test_items)
+        ),
+
+        "clean_accuracy": (
+            conditions["clean"]
+            ["accuracy"]
+        ),
+
+        "clean_f1": (
+            conditions["clean"]
+            ["f1"]
+        ),
+
+        "most_damaging_condition": (
+            most_damaging_condition
+        ),
+
+        "conditions": (
+            conditions
+        ),
+
+        "worst_condition_per_emotion": (
+            worst_per_class
+        ),
+
         "notes": {
-            "why_own_test_split": "Degrading our own labelled data isolates corruption "
-                                  "sensitivity from AffectNet's label noise.",
-            "rotation_rationale": "Training augments to +/-15 deg; the suite tests 30 "
-                                  "deg, outside that range, so the result reflects "
-                                  "generalisation rather than the augmentation itself.",
+            "why_own_test_split": (
+                "The same held-out images and labels are "
+                "used for every degradation, so changes in "
+                "performance are caused by the corruption."
+            ),
+
+            "rotation_rationale": (
+                "Training augmentation uses rotations up to "
+                "+/-15 degrees, while robustness evaluation "
+                "tests 30 degrees."
+            ),
         },
     }
-    write_json(payload, RESULTS / "robustness_results.json")
+
+    write_json(
+        payload,
+        RESULTS / "robustness_results.json",
+    )
+
     return payload
 
 
-# ------------------------------------------------------------------------ entrypoint
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main():
-    ap = argparse.ArgumentParser(description="AffectNet cross-domain eval + robustness")
-    ap.add_argument("--mode", choices=["all", "affectnet", "robustness"], default="all")
-    args = ap.parse_args()
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "AffectNet cross-domain evaluation "
+            "+ FER/RAF robustness evaluation"
+        )
+    )
+
+    parser.add_argument(
+        "--mode",
+        choices=[
+            "all",
+            "affectnet",
+            "robustness",
+        ],
+        default="all",
+    )
+
+    args = parser.parse_args()
+
+    print(
+        f"Device: {DEVICE}"
+    )
+
+    print(
+        "\nLoading final model..."
+    )
 
     model = load_checkpoint()
 
-    print("\nRebuilding the deterministic test split (random_state=42)...")
-    _, _, test_items = build_splits()
-    print(f"In-distribution test items: {len(test_items)}")
+    print(
+        "\nLoading the exact held-out "
+        "FER + RAF-DB test split..."
+    )
 
-    if args.mode in ("all", "affectnet"):
-        run_affectnet(model, test_items)
-    if args.mode in ("all", "robustness"):
-        run_robustness(model, test_items)
+    test_items = load_test_manifest()
 
-    # dvc.yaml declares all three outputs for the `evaluate` stage; --mode all must
-    # produce every one of them or `dvc repro` reports a missing output.
+    if args.mode in (
+        "all",
+        "affectnet",
+    ):
+        run_affectnet(
+            model,
+            test_items,
+        )
+
+    if args.mode in (
+        "all",
+        "robustness",
+    ):
+        run_robustness(
+            model,
+            test_items,
+        )
+
     if args.mode == "all":
-        for required in (
+
+        required_outputs = [
             RESULTS / "affectnet_eval.json",
             RESULTS / "robustness_results.json",
             PLOTS / "confusion_matrix.png",
-        ):
-            if not required.exists():
-                sys.exit(f"ERROR: declared DVC output missing: {required}")
-        print("\nAll declared DVC outputs present.")
+        ]
+
+        for output in required_outputs:
+
+            if not output.exists():
+                sys.exit(
+                    "ERROR: required output "
+                    f"missing: {output}"
+                )
+
+        print(
+            "\nAll evaluation outputs are present."
+        )
 
 
 if __name__ == "__main__":

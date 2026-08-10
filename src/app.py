@@ -32,7 +32,7 @@ LABELS = ["Angry", "Disgust", "Fear", "Happy", "Neutral", "Sad", "Surprise"]
 # Inference feature log consumed by src/monitor.py. The drift monitor had no input
 # because nothing ever wrote this file; the service now appends one row per detected
 # face. Path comes from params.yaml -- nothing hardcoded.
-INFERENCE_LOG = Path(P["monitoring"]["current_data_path"])
+INFERENCE_LOG = Path(P.get("monitoring", {}).get("current_data_path") or P["data"].get("current_data_path", "data/inference_logs.csv"))
 LOG_COLUMNS = [
     "timestamp", "mean_brightness", "std_brightness", "mean_contrast",
     "face_width_ratio", "face_height_ratio", "predicted_label", "confidence",
@@ -40,7 +40,7 @@ LOG_COLUMNS = [
 MEAN = torch.tensor(P["data"]["mean"]).view(1, 3, 1, 1)
 STD = torch.tensor(P["data"]["std"]).view(1, 3, 1, 1)
 IMG_SIZE = P["data"]["image_size"]
-MODEL_PATH = Path(P["api"]["model_path"])
+MODEL_PATH = Path(P.get("api", {}).get("model_path") or P["data"]["model_path"])
 
 
 class Detection(BaseModel):

@@ -1,0 +1,26 @@
+# requirements-api.txt -- runtime deps for the inference container ONLY.
+#
+# Why this file exists: the Phase 2 checklist requires `docker build` to finish in
+# under 5 minutes. The full requirements.txt pulls mlflow, lime, pytorch-grad-cam,
+# evidently, matplotlib, seaborn, statsmodels and the CUDA build of torch (~2.5 GB of
+# wheels) -- none of which src/app.py imports. This installs the CPU torch wheel and
+# nothing the service does not actually use.
+#
+# Install with the CPU index (see Dockerfile):
+#   pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-api.txt
+
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.1.0+cpu
+torchvision==0.16.0+cpu
+
+# headless build: no libGL/X11 system libraries needed in the image
+opencv-python-headless==4.8.1.78
+mediapipe==0.10.9
+
+numpy==1.26.2
+PyYAML==6.0.1
+
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6

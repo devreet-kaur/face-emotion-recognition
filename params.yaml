@@ -1,33 +1,36 @@
-﻿data:
-  fer2013_path: data/FER       # folder format: FER/train/{class}/*.jpg  FER/test/{class}/*.jpg
-  rafdb_path: data/basic       # RAF-DB basic: basic/EmoLabel/list_patition_label.txt + basic/Image/aligned.zip
+data:
+  fer2013_path: data/FER
+  rafdb_path: data/basic
   affectnet_path: data/affectnet
-  merged_path: data/merged     # output of prepare stage
+  merged_path: data/merged
+
   affectnet_class_map:
-    0: 0  # Angry
-    1: 1  # Disgust
-    2: 2  # Fear
-    3: 3  # Happy
-    4: 4  # Neutral
-    5: 5  # Sad
-    6: 6  # Surprise
+    0: 0
+    2: 1
+    3: 2
+    4: 3
+    5: 4
+    6: 5
+    7: 6
+
   model_path: results/models/best_model.pth
   reference_data_path: data/merged/train_reference_sample.csv
   current_data_path: data/inference_logs.csv
   report_path: reports/drift/
   n_reference_samples: 1000
+
   train_ratio: 0.70
   image_size: 224
   num_workers: 2
   val_ratio: 0.15
   test_ratio: 0.15
+
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
-  # Label format notes:
-  # FER folder: subfolders named angry disgust fear happy neutral sad surprise (alphabetical = 0-6)
-  # RAF-DB basic: 1-indexed (1=Surprise 2=Fear 3=Disgust 4=Happiness 5=Sadness 6=Anger 7=Neutral)
+
   fer2013_label_map: {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6}
   rafdb_label_map: {1: 6, 2: 2, 3: 1, 4: 3, 5: 5, 6: 0, 7: 4}
+
 
 augmentation:
   horizontal_flip_p: 0.5
@@ -35,6 +38,7 @@ augmentation:
   rotate_p: 0.4
   brightness_contrast_p: 0.4
   gauss_noise_p: 0.2
+
 
 training:
   batch_size: 32
@@ -45,6 +49,7 @@ training:
   mixed_precision: true
   checkpoint_every_n_epochs: 1
 
+
 model:
   num_classes: 7
   architecture: efficientnet_b0
@@ -53,6 +58,7 @@ model:
   target_layer_efficientnet: features.8.0
   target_layer_resnet50: layer4.2
   target_layer_mobilenet: features.18.0
+
 
 preprocessing:
   mediapipe_confidence: 0.5
@@ -68,6 +74,7 @@ preprocessing:
   adaptive_dark_threshold: 60
   adaptive_bright_threshold: 150
 
+
 explainability:
   target_layer_efficientnet: features.8.0
   target_layer_resnet50: layer4.2
@@ -76,6 +83,7 @@ explainability:
   lime_n_features: 10
   lime_n_segments: 80
 
+
 explainability_hybrid:
   gradcam_roi_expansion: 0.15
   gradcam_activation_threshold: 0.4
@@ -83,3 +91,30 @@ explainability_hybrid:
   lime_n_samples: 40
   lime_n_features: 10
   hybrid_overlay_alpha: 0.5
+
+
+evaluate:
+  affectnet_class_map:
+    0: 0
+    2: 1
+    3: 2
+    4: 3
+    5: 4
+    6: 5
+    7: 6
+
+  robustness_dark_factor: 0.4
+  robustness_blur_sigma: 3.0
+  robustness_rotate_angle: 30
+  robustness_occlude_patch: 40
+
+
+api:
+  model_path: results/models/best_model.pth
+
+
+monitoring:
+  reference_data_path: data/merged/train_reference_sample.csv
+  current_data_path: data/inference_logs.csv
+  report_path: reports/drift/
+  n_reference_samples: 1000

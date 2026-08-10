@@ -226,7 +226,43 @@ def get_dataloaders():
 
 
 if __name__ == "__main__":
-    train_l, val_l, test_l = get_dataloaders()
-    imgs, labels = next(iter(train_l))
-    print(f"Batch shape: {imgs.shape}")
-    print(f"Label sample: {[LABELS[lab.item()] for lab in labels[:8]]}")
+    import argparse
+    import json
+    import os
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", type=str, default="prepare")
+    args = parser.parse_args()
+
+    if args.mode == "prepare":
+        print("Running prepare stage...")
+        train_items, val_items, test_items = build_splits()
+
+        os.makedirs("data/merged", exist_ok=True)
+
+        def save_split(items, path):
+            data = [{"path": str(it[0]), "label": int(it[1]), "source": str(it[2])}
+                    for it in items]
+            with open(path, "w") as f:
+                json.dump(data, f, indent=2)
+            print(f"Saved {len(data)} items -> {path}")
+
+        save_split(train_items, "data/merged/train_items.json")
+        save_split(val_items,   "data/merged/val_items.json")
+        save_split(test_items,  "data/merged/test_items.json")
+
+        summary = {
+            "train": len(train_items),
+            "val":   len(val_items),
+            "test":  len(test_items),
+        }
+        with open("data/merged/summary.json", "w") as f:
+            json.dump(summary, f, indent=2)
+
+        print(f"Prepare complete. Train={summary['train']} Val={summary['val']} Test={summary['test']}")
+
+    else:
+        train_l, val_l, test_l = get_dataloaders()
+        imgs, labels = next(iter(train_l))
+        print(f"Batch shape: {imgs.shape}")
+        print(f"Label sample: {[LABELS[lab.item()] for lab in labels[:8]]}")

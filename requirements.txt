@@ -1,4 +1,4 @@
-torch
+﻿torch
 torchvision
 opencv-python==4.8.1.78
 albumentations==1.3.1

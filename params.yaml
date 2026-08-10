@@ -5,14 +5,13 @@ data:
   merged_path: data/merged
 
   affectnet_class_map:
-    0: 0  # Angry
-    2: 1  # Disgust
-    3: 2  # Fear
-    4: 3  # Happy
-    5: 4  # Neutral
-    6: 5  # Sad
-    7: 6  # Surprise
-    # AffectNet class 1 = Contempt, intentionally dropped
+    0: 0
+    2: 1
+    3: 2
+    4: 3
+    5: 4
+    6: 5
+    7: 6
 
   model_path: results/models/best_model.pth
   reference_data_path: data/merged/train_reference_sample.csv
@@ -29,13 +28,7 @@ data:
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
 
-  # FER folder classes:
-  # 0=Angry 1=Disgust 2=Fear 3=Happy 4=Neutral 5=Sad 6=Surprise
   fer2013_label_map: {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6}
-
-  # RAF-DB:
-  # 1=Surprise 2=Fear 3=Disgust 4=Happiness
-  # 5=Sadness 6=Anger 7=Neutral
   rafdb_label_map: {1: 6, 2: 2, 3: 1, 4: 3, 5: 5, 6: 0, 7: 4}
 
 

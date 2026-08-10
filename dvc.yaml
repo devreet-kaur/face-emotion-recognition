@@ -24,8 +24,6 @@ stages:
     params:
       - model
       - training
-      - optimizer
-      - scheduler
       - augmentation
     outs:
       - results/models/best_model.pth

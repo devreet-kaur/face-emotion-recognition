@@ -156,7 +156,7 @@ def load_checkpoint() -> nn.Module:
 
 def load_test_manifest():
     """
-    Load the exact held-out test split created by the prepare stage.
+    Load the current regenerated test manifest created by the prepare stage.
 
     The manifest now stores real image paths after the PR #18 fix.
     """
@@ -207,7 +207,7 @@ def load_test_manifest():
         )
 
     print(
-        f"Loaded exact held-out test manifest: "
+        f"Loaded current test manifest: "
         f"{len(items)} images"
     )
 
@@ -1356,7 +1356,7 @@ def run_robustness(
         ),
 
         "evaluated_on": (
-            "Exact held-out FER+RAF-DB test split "
+            "Current regenerated FER+RAF-DB test manifest "
             "from data/merged/test_items.json"
         ),
 
@@ -1445,7 +1445,7 @@ def main():
     model = load_checkpoint()
 
     print(
-        "\nLoading the exact held-out "
+        "\nLoading the current regenerated "
         "FER + RAF-DB test split..."
     )
 

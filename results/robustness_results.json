@@ -1,6 +1,6 @@
 {
   "architecture": "efficientnet_b0",
-  "evaluated_on": "Exact held-out FER+RAF-DB test split from data/merged/test_items.json",
+  "evaluated_on": "Current regenerated FER+RAF-DB test manifest from data/merged/test_items.json",
   "n_samples": 7684,
   "clean_accuracy": 0.873,
   "clean_f1": 0.845,

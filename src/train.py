@@ -34,7 +34,7 @@ import mlflow.pytorch
 
 # Local import
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from src.dataset import get_dataloaders, LABELS
+from src.dataset import get_dataloaders, LABELS  # noqa: E402
 
 
 # ── Load params ───────────────────────────────────────────────

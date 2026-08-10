@@ -226,7 +226,9 @@ def get_dataloaders():
 
 
 if __name__ == "__main__":
-    import argparse, json, os
+    import argparse
+    import json
+    import os
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", type=str, default="prepare")
@@ -263,4 +265,4 @@ if __name__ == "__main__":
         train_l, val_l, test_l = get_dataloaders()
         imgs, labels = next(iter(train_l))
         print(f"Batch shape: {imgs.shape}")
-        print(f"Label sample: {[LABELS[l.item()] for l in labels[:8]]}")
+        print(f"Label sample: {[LABELS[lab.item()] for lab in labels[:8]]}")

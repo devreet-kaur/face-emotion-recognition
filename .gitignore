@@ -77,3 +77,4 @@ logs/
 kaggle.json
 credentials.json
 token.json
+!*.pth.dvc

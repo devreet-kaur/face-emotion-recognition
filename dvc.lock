@@ -37,3 +37,48 @@ stages:
       md5: d751713988987e9331980363e24189ce.dir
       size: 0
       nfiles: 0
+  train:
+    cmd: python src/train.py --arch efficientnet_b0
+    deps:
+    - path: data/merged
+      hash: md5
+      md5: 6ffbaaad7b4ac6e1afabed19a80b2560.dir
+      size: 0
+      nfiles: 1
+    - path: src/train.py
+      hash: md5
+      md5: e261c3bf250ac0e32e065941ab03ac92
+      size: 15255
+    params:
+      params.yaml:
+        augmentation:
+          horizontal_flip_p: 0.5
+          rotate_limit: 15
+          rotate_p: 0.4
+          brightness_contrast_p: 0.4
+          gauss_noise_p: 0.2
+        model:
+          num_classes: 7
+          architecture: efficientnet_b0
+          pretrained: true
+          dropout: 0.2
+          target_layer_efficientnet: features.8.0
+          target_layer_resnet50: layer4.2
+          target_layer_mobilenet: features.18.0
+        training:
+          batch_size: 32
+          epochs: 30
+          learning_rate: 0.0001
+          weight_decay: 0.0001
+          patience: 5
+          mixed_precision: true
+          checkpoint_every_n_epochs: 1
+    outs:
+    - path: results/ablation_table.json
+      hash: md5
+      md5: 3845718765c152f748b81a2d05f08133
+      size: 5398
+    - path: results/models/best_model.pth
+      hash: md5
+      md5: 44ea24bd9bfd0119baeb8191da0d9df5
+      size: 48690810

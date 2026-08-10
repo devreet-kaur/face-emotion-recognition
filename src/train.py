@@ -90,8 +90,8 @@ def compute_class_weights(dataloader, num_classes, device):
     """Compute inverse-frequency class weights from training DataLoader."""
     counts = Counter()
     for _, labels in dataloader:
-        for l in labels.tolist():
-            counts[l] += 1
+        for lbl in labels.tolist():
+            counts[lbl] += 1
     total = sum(counts.values())
     weights = torch.tensor(
         [total / (num_classes * counts.get(i, 1)) for i in range(num_classes)],
@@ -132,7 +132,7 @@ def evaluate(model, loader, device):
             preds = torch.argmax(model(imgs), dim=1).cpu().tolist()
             all_preds.extend(preds)
             all_labels.extend(lbls.tolist())
-    acc = sum(p == l for p, l in zip(all_preds, all_labels)) / len(all_labels)
+    acc = sum(p == lbl for p, lbl in zip(all_preds, all_labels)) / len(all_labels)
     f1  = f1_score(all_labels, all_preds, average="macro", zero_division=0)
     return acc, f1
 
@@ -248,7 +248,7 @@ def main():
     latest_ckpt = models_dir / f"{arch}_latest.pth"
     if latest_ckpt.exists():
         print(f"[train] Found checkpoint, resuming: {latest_ckpt}")
-          checkpoint = torch.load(latest_ckpt, map_location=device, weights_only=False)
+        checkpoint = torch.load(latest_ckpt, map_location=device, weights_only=False)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         start_epoch  = checkpoint["epoch"] + 1
@@ -354,7 +354,7 @@ def main():
     latest_ckpt = models_dir / f"{arch}_latest.pth"
     if latest_ckpt.exists():
         latest_ckpt.unlink()
-        print(f"[train] Removed resume checkpoint (training complete)")
+        print("[train] Removed resume checkpoint (training complete)")
 
     # ── Compile ablation table ────────────────────────────────
     archs_all = ["efficientnet_b0", "resnet50", "mobilenet_v3_large"]

@@ -1,0 +1,50 @@
+{
+  "best_method": "baseline",
+  "best_accuracy": 0.89738430583501,
+  "baseline_accuracy": 0.89738430583501,
+  "accuracy_gain": 0.0,
+  "mcnemar_p_approx": 0.05,
+  "n_samples": 497,
+  "all_methods": {
+    "baseline": {
+      "accuracy": 0.89738430583501,
+      "correct": 446,
+      "total": 497
+    },
+    "standard_he": {
+      "accuracy": 0.8189134808853119,
+      "correct": 407,
+      "total": 497
+    },
+    "clahe_2_8": {
+      "accuracy": 0.8108651911468813,
+      "correct": 403,
+      "total": 497
+    },
+    "clahe_3_4": {
+      "accuracy": 0.8048289738430584,
+      "correct": 400,
+      "total": 497
+    },
+    "clahe_4_8": {
+      "accuracy": 0.7022132796780685,
+      "correct": 349,
+      "total": 497
+    },
+    "retinex": {
+      "accuracy": 0.7665995975855131,
+      "correct": 381,
+      "total": 497
+    },
+    "gamma": {
+      "accuracy": 0.8913480885311871,
+      "correct": 443,
+      "total": 497
+    },
+    "unsharp": {
+      "accuracy": 0.8913480885311871,
+      "correct": 443,
+      "total": 497
+    }
+  }
+}

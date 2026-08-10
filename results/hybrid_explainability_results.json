@@ -1,0 +1,10 @@
+{
+  "roi_percentage": 36.59,
+  "compute_reduction_pct": 63.41,
+  "roi_bbox": [
+    58,
+    48,
+    177,
+    200
+  ]
+}

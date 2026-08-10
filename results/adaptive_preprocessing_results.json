@@ -1,0 +1,10 @@
+{
+  "adaptive_accuracy": 0.89738430583501,
+  "correct": 446,
+  "total": 497,
+  "method_distribution": {
+    "unsharp": 299,
+    "baseline": 192,
+    "clahe": 6
+  }
+}

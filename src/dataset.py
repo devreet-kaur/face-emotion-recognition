@@ -64,20 +64,8 @@ def load_fer(root: str):
                 continue
             label = FER_MAP[class_name]
             for img_path in class_dir.glob("*.jpg"):
-                img = cv2.imread(str(img_path))
-                if img is None:
-                    img = cv2.imdecode(
-                        np.fromfile(str(img_path), dtype=np.uint8),
-                        cv2.IMREAD_COLOR
-                    )
-                if img is None:
-                    continue
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                # FER images are 48x48 grayscale saved as jpg -- convert to RGB
-                if img.shape[0] == img.shape[1] == 48:
-                    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-                    img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
-                items.append((img, label, "fer"))
+                # Store path only -- image is decoded lazily in MergedFERDataset
+                items.append((str(img_path), label, "fer"))
     return items
 
 
@@ -115,15 +103,8 @@ def load_rafdb_basic(root: str):
             img_path = img_dir / f"{stem}_aligned.jpg"
             if not img_path.exists():
                 continue
-            img = cv2.imdecode(
-                np.fromfile(str(img_path), dtype=np.uint8),
-                cv2.IMREAD_COLOR
-            )
-            if img is None:
-                continue
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             label = RAF_MAP[raf_label]
-            items.append((img, label, "rafdb"))
+            items.append((str(img_path), label, "rafdb"))
     return items
 
 
@@ -157,7 +138,16 @@ class MergedFERDataset(Dataset):
         return len(self.items)
 
     def __getitem__(self, idx):
-        img, label, _ = self.items[idx]
+        img_path, label, source = self.items[idx]
+        img = cv2.imdecode(
+            np.fromfile(str(img_path), dtype=np.uint8),
+            cv2.IMREAD_COLOR
+        )
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # FER images are 48x48 grayscale saved as jpg -- convert to RGB
+        if source == "fer" and img.shape[0] == img.shape[1] == 48:
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            img = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
         tf = self.train_tf if self.augment else self.val_tf
         return tf(image=img)["image"], label
 

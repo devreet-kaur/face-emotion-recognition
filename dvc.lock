@@ -5,18 +5,18 @@ stages:
     deps:
     - path: data/FER
       hash: md5
-      md5: ebfce6cdd9da48bb3de0a8c024edc552.dir
-      size: 119762302
-      nfiles: 35888
+      md5: d751713988987e9331980363e24189ce.dir
+      size: 0
+      nfiles: 0
     - path: data/basic
       hash: md5
-      md5: 99b69d390074a5c42b1b81b8c921dd96.dir
-      size: 2165284577
-      nfiles: 15347
+      md5: d751713988987e9331980363e24189ce.dir
+      size: 0
+      nfiles: 0
     - path: src/dataset.py
       hash: md5
-      md5: 96195a9a11f51d519618e1545ca08449
-      size: 9550
+      md5: fc6315b3c4fee8d0382767d3dda57183
+      size: 9808
     params:
       params.yaml:
         data.image_size: 224
@@ -34,9 +34,9 @@ stages:
     outs:
     - path: data/merged
       hash: md5
-      md5: ee9b8074e987c3f39b36d481bcefe6a7.dir
+      md5: c861f56aa9ea5df1f5f389f8e7baaa19.dir
       size: 5407946
-      nfiles: 4
+      nfiles: 5
   train:
     cmd: python src/train.py --arch efficientnet_b0
     deps:

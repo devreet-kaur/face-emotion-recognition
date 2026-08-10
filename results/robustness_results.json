@@ -1,0 +1,341 @@
+{
+  "architecture": "efficientnet_b0",
+  "evaluated_on": "Current regenerated FER+RAF-DB test manifest from data/merged/test_items.json",
+  "n_samples": 7684,
+  "clean_accuracy": 0.873,
+  "clean_f1": 0.845,
+  "most_damaging_condition": "blur",
+  "conditions": {
+    "clean": {
+      "accuracy": 0.873,
+      "f1": 0.845,
+      "n_samples": 7684,
+      "per_class": {
+        "Angry": {
+          "precision": 0.871,
+          "recall": 0.8351,
+          "f1": 0.8526,
+          "support": 873
+        },
+        "Disgust": {
+          "precision": 0.7411,
+          "recall": 0.6854,
+          "f1": 0.7122,
+          "support": 213
+        },
+        "Fear": {
+          "precision": 0.8738,
+          "recall": 0.7929,
+          "f1": 0.8314,
+          "support": 821
+        },
+        "Happy": {
+          "precision": 0.9381,
+          "recall": 0.9452,
+          "f1": 0.9416,
+          "support": 2243
+        },
+        "Neutral": {
+          "precision": 0.8193,
+          "recall": 0.8553,
+          "f1": 0.8369,
+          "support": 1410
+        },
+        "Sad": {
+          "precision": 0.8246,
+          "recall": 0.8587,
+          "f1": 0.8413,
+          "support": 1281
+        },
+        "Surprise": {
+          "precision": 0.9011,
+          "recall": 0.8968,
+          "f1": 0.8989,
+          "support": 843
+        }
+      },
+      "parameter": "none",
+      "accuracy_drop_vs_clean": 0.0
+    },
+    "dark": {
+      "accuracy": 0.8261,
+      "f1": 0.796,
+      "n_samples": 7684,
+      "per_class": {
+        "Angry": {
+          "precision": 0.7477,
+          "recall": 0.8247,
+          "f1": 0.7843,
+          "support": 873
+        },
+        "Disgust": {
+          "precision": 0.7062,
+          "recall": 0.6432,
+          "f1": 0.6732,
+          "support": 213
+        },
+        "Fear": {
+          "precision": 0.8492,
+          "recall": 0.6857,
+          "f1": 0.7588,
+          "support": 821
+        },
+        "Happy": {
+          "precision": 0.9338,
+          "recall": 0.9117,
+          "f1": 0.9226,
+          "support": 2243
+        },
+        "Neutral": {
+          "precision": 0.7487,
+          "recall": 0.8113,
+          "f1": 0.7788,
+          "support": 1410
+        },
+        "Sad": {
+          "precision": 0.7509,
+          "recall": 0.8002,
+          "f1": 0.7748,
+          "support": 1281
+        },
+        "Surprise": {
+          "precision": 0.9142,
+          "recall": 0.847,
+          "f1": 0.8793,
+          "support": 843
+        }
+      },
+      "parameter": "brightness x 0.4",
+      "accuracy_drop_vs_clean": 0.0469
+    },
+    "blur": {
+      "accuracy": 0.2578,
+      "f1": 0.1374,
+      "n_samples": 7684,
+      "per_class": {
+        "Angry": {
+          "precision": 0.8889,
+          "recall": 0.0092,
+          "f1": 0.0181,
+          "support": 873
+        },
+        "Disgust": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 213
+        },
+        "Fear": {
+          "precision": 0.1818,
+          "recall": 0.0146,
+          "f1": 0.0271,
+          "support": 821
+        },
+        "Happy": {
+          "precision": 0.8213,
+          "recall": 0.1926,
+          "f1": 0.312,
+          "support": 2243
+        },
+        "Neutral": {
+          "precision": 0.2015,
+          "recall": 0.983,
+          "f1": 0.3344,
+          "support": 1410
+        },
+        "Sad": {
+          "precision": 0.6977,
+          "recall": 0.0234,
+          "f1": 0.0453,
+          "support": 1281
+        },
+        "Surprise": {
+          "precision": 0.7019,
+          "recall": 0.134,
+          "f1": 0.2251,
+          "support": 843
+        }
+      },
+      "parameter": "gaussian sigma 3.0",
+      "accuracy_drop_vs_clean": 0.6152
+    },
+    "rotate": {
+      "accuracy": 0.6553,
+      "f1": 0.6079,
+      "n_samples": 7684,
+      "per_class": {
+        "Angry": {
+          "precision": 0.5696,
+          "recall": 0.614,
+          "f1": 0.591,
+          "support": 873
+        },
+        "Disgust": {
+          "precision": 0.5618,
+          "recall": 0.4695,
+          "f1": 0.5115,
+          "support": 213
+        },
+        "Fear": {
+          "precision": 0.5692,
+          "recall": 0.4409,
+          "f1": 0.4969,
+          "support": 821
+        },
+        "Happy": {
+          "precision": 0.7863,
+          "recall": 0.8761,
+          "f1": 0.8288,
+          "support": 2243
+        },
+        "Neutral": {
+          "precision": 0.6076,
+          "recall": 0.5326,
+          "f1": 0.5676,
+          "support": 1410
+        },
+        "Sad": {
+          "precision": 0.5145,
+          "recall": 0.6635,
+          "f1": 0.5796,
+          "support": 1281
+        },
+        "Surprise": {
+          "precision": 0.869,
+          "recall": 0.5587,
+          "f1": 0.6801,
+          "support": 843
+        }
+      },
+      "parameter": "30 degrees",
+      "accuracy_drop_vs_clean": 0.2177
+    },
+    "occlude": {
+      "accuracy": 0.7206,
+      "f1": 0.6671,
+      "n_samples": 7684,
+      "per_class": {
+        "Angry": {
+          "precision": 0.441,
+          "recall": 0.8351,
+          "f1": 0.5772,
+          "support": 873
+        },
+        "Disgust": {
+          "precision": 0.878,
+          "recall": 0.338,
+          "f1": 0.4881,
+          "support": 213
+        },
+        "Fear": {
+          "precision": 0.7797,
+          "recall": 0.5043,
+          "f1": 0.6124,
+          "support": 821
+        },
+        "Happy": {
+          "precision": 0.8911,
+          "recall": 0.8899,
+          "f1": 0.8905,
+          "support": 2243
+        },
+        "Neutral": {
+          "precision": 0.6478,
+          "recall": 0.7461,
+          "f1": 0.6935,
+          "support": 1410
+        },
+        "Sad": {
+          "precision": 0.8064,
+          "recall": 0.4715,
+          "f1": 0.5951,
+          "support": 1281
+        },
+        "Surprise": {
+          "precision": 0.8323,
+          "recall": 0.7948,
+          "f1": 0.8131,
+          "support": 843
+        }
+      },
+      "parameter": "40x40 px patch",
+      "accuracy_drop_vs_clean": 0.1524
+    }
+  },
+  "worst_condition_per_emotion": {
+    "Angry": {
+      "worst_condition": "blur",
+      "f1_drop": 0.8345,
+      "all_drops": {
+        "dark": 0.0683,
+        "blur": 0.8345,
+        "rotate": 0.2616,
+        "occlude": 0.2754
+      }
+    },
+    "Disgust": {
+      "worst_condition": "blur",
+      "f1_drop": 0.7122,
+      "all_drops": {
+        "dark": 0.039,
+        "blur": 0.7122,
+        "rotate": 0.2007,
+        "occlude": 0.2241
+      }
+    },
+    "Fear": {
+      "worst_condition": "blur",
+      "f1_drop": 0.8043,
+      "all_drops": {
+        "dark": 0.0726,
+        "blur": 0.8043,
+        "rotate": 0.3345,
+        "occlude": 0.219
+      }
+    },
+    "Happy": {
+      "worst_condition": "blur",
+      "f1_drop": 0.6296,
+      "all_drops": {
+        "dark": 0.019,
+        "blur": 0.6296,
+        "rotate": 0.1128,
+        "occlude": 0.0511
+      }
+    },
+    "Neutral": {
+      "worst_condition": "blur",
+      "f1_drop": 0.5025,
+      "all_drops": {
+        "dark": 0.0581,
+        "blur": 0.5025,
+        "rotate": 0.2693,
+        "occlude": 0.1434
+      }
+    },
+    "Sad": {
+      "worst_condition": "blur",
+      "f1_drop": 0.796,
+      "all_drops": {
+        "dark": 0.0665,
+        "blur": 0.796,
+        "rotate": 0.2617,
+        "occlude": 0.2462
+      }
+    },
+    "Surprise": {
+      "worst_condition": "blur",
+      "f1_drop": 0.6738,
+      "all_drops": {
+        "dark": 0.0196,
+        "blur": 0.6738,
+        "rotate": 0.2188,
+        "occlude": 0.0858
+      }
+    }
+  },
+  "notes": {
+    "why_own_test_split": "The same held-out images and labels are used for every degradation, so changes in performance are caused by the corruption.",
+    "rotation_rationale": "Training augmentation uses rotations up to +/-15 degrees, while robustness evaluation tests 30 degrees."
+  }
+}
